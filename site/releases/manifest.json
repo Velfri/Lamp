@@ -2,7 +2,7 @@
   "schema": 1,
   "base": "https://velfri.github.io/Lamp/",
   "board": "esp32-c3",
-  "updated": "2026-11-15T18:09:36.285Z",
+  "updated": "2026-11-15T18:14:16.545Z",
   "releases": [
     {
       "version": "2.1.0",

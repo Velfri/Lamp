@@ -55,6 +55,7 @@
       } else el.textContent = v;
     });
     $$('[data-i18n-html]').forEach((el) => { el.innerHTML = safeHtml(tr(el.dataset.i18nHtml)); });
+    $$('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', tr(el.dataset.i18nAria)); });
     $$('.lang button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === lang)));
     // Заголовок і description — теж двома мовами
     if (T[lang] && T[lang]['meta.title']) document.title = T[lang]['meta.title'];
@@ -147,9 +148,24 @@
   }
 
   // Реальна кількість ефектів у прошивці — щоб не було вигаданих "30+"
+  // і щоб українське відмінювання було правильним: 1 ефект / 2 ефекти / 5 ефектів
+  function fxWord(n) {
+    if (lang !== 'uk') return n === 1 ? 'effect' : 'effects';
+    const n10 = n % 10, n100 = n % 100;
+    if (n10 === 1 && n100 !== 11) return 'ефект';
+    if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return 'ефекти';
+    return 'ефектів';
+  }
   function paintFxCount() {
     const n = FX.ok ? FX.EFFECTS.filter((e) => !e.hidden).length : 0;
     $$('[data-fx-count]').forEach((el) => { el.textContent = n ? String(n) : '30+'; });
+    // Підпис біля числа — узгоджуємо з числом
+    if (n) {
+      const strip = document.querySelector('#m-fx + span[data-i18n="hero.meta.fx"]');
+      if (strip) strip.textContent = fxWord(n);
+      const strip2 = document.querySelector('.strip [data-i18n="strip.fx"]');
+      if (strip2) strip2.textContent = lang === 'uk' ? 'живих ' + fxWord(n) : 'live effects';
+    }
   }
 
   const rel = (LAMP.releases || [])[0] || {};

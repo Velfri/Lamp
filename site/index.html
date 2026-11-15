@@ -45,7 +45,7 @@
       <img src="assets/icon-192.png" alt="" width="32" height="32">
       <span class="brand-txt"><b>Smart Lamp</b><small data-i18n="brand.sub"></small></span>
     </a>
-    <nav class="nav-links" aria-label="Main">
+    <nav class="nav-links" aria-label="Main" data-i18n-aria="stage.main">
       <a href="#start" data-i18n="nav.start"></a>
       <a href="#features" data-i18n="nav.features"></a>
       <a href="#gallery" data-i18n="nav.gallery"></a>
@@ -55,10 +55,10 @@
       <a href="#faq" data-i18n="nav.faq"></a>
       <a href="#api" data-i18n="nav.api"></a>
     </nav>
-    <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="mnav" aria-label="Menu">
+    <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="mnav" aria-label="Menu" data-i18n-aria="stage.menu">
       <span></span><span></span><span></span>
     </button>
-    <div class="lang" role="group" aria-label="Language">
+    <div class="lang" role="group" aria-label="Language" data-i18n-aria="stage.lang">
       <button type="button" data-lang="uk" aria-pressed="true">UA</button>
       <button type="button" data-lang="en" aria-pressed="false">EN</button>
     </div>
@@ -107,14 +107,14 @@
         </div>
       </div>
 
-      <div class="stage" id="stage" aria-label="Live lamp preview">
+      <div class="stage" id="stage" aria-label="Live lamp preview" data-i18n-aria="stage.aria">
         <canvas id="lamp-canvas" aria-hidden="true"></canvas>
         <div class="stage-tag">
           <span class="dot"></span>
-          <label class="sr" for="fx-select">Effect</label>
+          <label class="sr" for="fx-select" data-i18n="stage.effect">Effect</label>
           <select id="fx-select"></select>
         </div>
-        <button class="stage-power" id="fx-power" data-on="true" type="button" aria-pressed="true" aria-label="Power">
+        <button class="stage-power" id="fx-power" data-on="true" type="button" aria-pressed="true" aria-label="Power" data-i18n-aria="stage.power">
           <svg class="i"><use href="#i-power"/></svg>
         </button>
       </div>
