@@ -1,5 +1,31 @@
 {
   "base": "https://velfri.github.io/Lamp/",
   "board": "esp32-c3",
-  "releases": []
+  "releases": [
+    {
+      "version": "2.1.0",
+      "date": "2026-11-15",
+      "file": "releases/smart-lamp-2.1.0.bin",
+      "size": 1294432,
+      "sha256": "e9ead2a4fa60e2802995c796ae886b6739d8896d3e0989d00913b104e5c83272",
+      "notes": {
+        "uk": [
+          "PWA-застосунок просто у флеш-пам’яті лампи: працює без інтернету",
+          "Понад 30 ефектів з масштабом, швидкістю та власними палітрами",
+          "Розклад вмикання/вимикання та будильник «Світанок» у самій лампі",
+          "Оновлення по повітрю (OTA): з файлу або прямо з цього сайту",
+          "Автоматична перевірка й завантаження оновлень із цього сайту",
+          "Перевірка SHA-256: пошкоджене чи обірване оновлення не встановиться"
+        ],
+        "en": [
+          "PWA app stored in the lamp’s own flash: works without internet",
+          "30+ effects with scale, speed and custom palettes",
+          "On-lamp on/off schedule and the “Sunrise” alarm",
+          "Over-the-air updates (OTA): from a file or straight from this site",
+          "Automatic check and download of updates from this site",
+          "SHA-256 verification: a corrupt or partial download is rejected"
+        ]
+      }
+    }
+  ]
 }

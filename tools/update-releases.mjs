@@ -17,10 +17,15 @@ const siteDir = (() => {
 })();
 const idxPath = path.join(siteDir, 'releases', 'index.json');
 
+// Прапорці бувають зі значенням (--version 2.1.0) і без (--notes-from-data)
 const args = {};
-for (let i = 2; i < process.argv.length; i += 2) {
-  const k = process.argv[i].replace(/^--/, '');
-  args[k] = process.argv[i + 1];
+const argv = process.argv.slice(2);
+for (let i = 0; i < argv.length; i++) {
+  if (!argv[i].startsWith('--')) continue;
+  const k = argv[i].replace(/^--/, '');
+  const next = argv[i + 1];
+  if (next === undefined || next.startsWith('--')) { args[k] = true; }
+  else { args[k] = next; i++; }
 }
 
 if (!args.version || !args.file) {
@@ -45,7 +50,32 @@ const entry = {
   sha256: args.sha256 ? String(args.sha256).toLowerCase() : null,
 };
 
-if (args.notes && fs.existsSync(path.join(root, args.notes))) {
+// --notes-from-data: нотатки беремо з site/assets/data.js (те, що бачить користувач)
+if (args['notes-from-data']) {
+  const candidates = ['site/assets/data.js', 'docs/assets/data.js'];
+  const dataPath = candidates.map((c) => path.join(root, c)).find((p) => fs.existsSync(p));
+  if (dataPath) {
+    const src = fs.readFileSync(dataPath, 'utf8');
+    const block = src.indexOf('releases: [');
+    const notesAt = block >= 0 ? src.indexOf('notes:', block) : -1;
+    if (notesAt > 0) {
+      const ukAt = src.indexOf('uk: [', notesAt);
+      const enAt = src.indexOf('en: [', notesAt);
+      const grab = (at) => {
+        if (at < 0) return [];
+        const end = src.indexOf(']', at);
+        const body = src.slice(at + 'uk: ['.length, end); // 'uk: [' і 'en: [' — однакова довжина
+        return [...body.matchAll(/'([^']*)'/g)].map((m) => m[1]);
+      };
+      const uk = grab(ukAt), en = grab(enAt);
+      if (uk.length || en.length) entry.notes = { uk, en };
+    }
+  }
+}
+
+if (entry.notes) {
+  // нотатки вже взяті з data.js
+} else if (args.notes && fs.existsSync(path.join(root, args.notes))) {
   const md = fs.readFileSync(path.join(root, args.notes), 'utf8');
   const lines = md.split('\n').map((l) => l.replace(/^[-*]\s*/, '').trim()).filter(Boolean);
   entry.notes = { uk: lines, en: lines };

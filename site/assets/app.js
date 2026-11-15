@@ -18,22 +18,53 @@
   let lang = 'uk';
   try {
     const saved = localStorage.getItem('lamp-site-lang');
-    const auto = (navigator.language || 'en').toLowerCase().startsWith('uk') ? 'uk' : 'en';
-    lang = saved === 'uk' || saved === 'en' ? saved : auto;
+    // Українська — типова мова сайту; англійська лише якщо її обрано вручну
+    lang = saved === 'uk' || saved === 'en' ? saved : 'uk';
   } catch (e) { /* приватний режим */ }
   const tr = (k) => (T[lang] && T[lang][k]) || T.uk[k] || k;
   const L = (obj) => (obj && (obj[lang] !== undefined ? obj[lang] : obj.uk)) || '';
+  // Маленьке сповіщення внизу екрана
+  let toastTimer = null;
+  function showToast(msg) {
+    let t = $('#toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'toast';
+      t.className = 'toast';
+      t.setAttribute('role', 'status');
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  }
+
   const fmtKB = (n) => (n == null ? '—' : n >= 1048576 ? (n / 1048576).toFixed(2) + ' MB' : Math.round(n / 1024) + ' KB');
 
   // ---------- 1. Статичні тексти ----------
   function applyLang() {
     document.documentElement.lang = lang;
-    $$('[data-i18n]').forEach((el) => { el.textContent = tr(el.dataset.i18n); });
+    $$('[data-i18n]').forEach((el) => {
+      const v = tr(el.dataset.i18n);
+      // hero-заголовок: остання фраза — градієнтним акцентом
+      if (el.dataset.i18n === 'hero.h1') {
+        const words = v.split(' ');
+        const cut = Math.ceil(words.length / 2);
+        el.innerHTML = esc(words.slice(0, cut).join(' ')) + ' <span class="glow">' + esc(words.slice(cut).join(' ')) + '</span>';
+      } else el.textContent = v;
+    });
     $$('[data-i18n-html]').forEach((el) => { el.innerHTML = safeHtml(tr(el.dataset.i18nHtml)); });
     $$('.lang button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === lang)));
+    // Заголовок і description — теж двома мовами
+    if (T[lang] && T[lang]['meta.title']) document.title = T[lang]['meta.title'];
+    const md = document.querySelector('meta[name="description"]');
+    if (md && T[lang] && T[lang]['meta.desc']) md.setAttribute('content', T[lang]['meta.desc']);
+    const ogt = document.querySelector('meta[property="og:title"]');
+    if (ogt && T[lang] && T[lang]['meta.title']) ogt.setAttribute('content', T[lang]['meta.title']);
     $('#foot-copy').textContent = '© ' + new Date().getFullYear() + ' · ' + tr('foot.copy');
 
-    renderFeatures(); renderRelease(); renderInstall(); renderSpecs(); renderFaq(); renderApi(); fillFxSelect();
+    renderQuick(); renderFeatures(); renderGallery(); paintFxCount(); renderChangelog(); renderRelease(); renderInstall(); renderSpecs(); renderFaq(); renderApi(); fillFxSelect();
     if (fileState) renderFileStatus();
     if (hashMsg) showHash(hashMsg);
   }
@@ -47,6 +78,78 @@
         <p>${esc(L(f.text))}</p>
       </article>`).join('');
     observeRise();
+  }
+
+  // Палітри для крапок у галереї — щоб кожен ефект мав свій колір
+  const FX_TINT = ['#ff7a2f', '#41d6a0', '#2f9bff', '#39ff88', '#ffd166', '#ffb454',
+    '#ff5ea8', '#e0533c', '#ffe066', '#a0e9ff', '#c77dff', '#7bffb2'];
+
+  function renderQuick() {
+    const steps = L(LAMP.quick) || [];
+    const box = $('#quick-steps');
+    if (!box) return;
+    if (!steps.length) { $('#start').hidden = true; return; }
+    box.innerHTML = steps.map((s, i) => `
+      <li class="q-step">
+        <span class="q-num">${i + 1}</span>
+        <h3>${esc(s.h)}</h3>
+        <p>${esc(s.p)}</p>
+      </li>`).join('');
+  }
+
+  function renderGallery() {
+    // Беремо СПРАВЖНІ ефекти з прошивки (src/effects.js), а не вигадані назви
+    if (!FX.ok) { $('#gallery').hidden = true; return; }
+    const seen = new Set();
+    const fx = FX.EFFECTS.filter((e) => {
+      if (!e || !e.id || e.hidden || seen.has(e.id)) return false;
+      seen.add(e.id); return true;
+    });
+    $('#fx-wall').innerHTML = fx.map((e, i) => `
+      <button class="fx-chip${e.id === selectedFx ? ' on' : ''}" type="button" data-fx="${esc(e.id)}">
+        <span class="fx-dot" style="--dot:${FX_TINT[i % FX_TINT.length]}"></span>
+        <span>${esc(fxName(e))}</span>
+      </button>`).join('');
+    $$('#fx-wall .fx-chip').forEach((b) => {
+      b.addEventListener('click', () => {
+        selectedFx = b.dataset.fx;
+        levelFrom = lampLevel; levelTo = 1; levelAt = performance.now(); fxOn = true;
+        $$('#fx-wall .fx-chip').forEach((x) => x.classList.toggle('on', x === b));
+        showToast(tr('gallery.toast').replace('{fx}', b.querySelector('span:last-child').textContent));
+        const sel = $('#fx-select');
+        if (sel && sel.querySelector('option[value="' + b.dataset.fx + '"]')) sel.value = b.dataset.fx;
+      });
+    });
+  }
+
+  function renderChangelog() {
+    // Історія береться з реального маніфесту (LAMP.releases), а не вигадується
+    const list = (LAMP.releases || []).filter((r) => r && r.version);
+    const box = $('#changelog-list');
+    if (!box) return;
+    if (!list.length) { $('#changelog').hidden = true; return; }
+    box.innerHTML = list.map((r) => {
+      const d = r.date ? new Date(r.date + 'T12:00:00Z') : null;
+      const date = d && !isNaN(d.getTime())
+        ? d.toLocaleDateString(lang === 'uk' ? 'uk-UA' : 'en-GB', { year: 'numeric', month: 'long', day: 'numeric' })
+        : (r.date || '');
+      const notes = L(r.notes) || [];
+      return `
+      <div class="tl-item">
+        <div class="tl-top">
+          <span class="tl-ver">v${esc(r.version)}</span>
+          <span class="tl-tag">${esc(tr('changelog.firmware'))}</span>
+          <span class="tl-date">${esc(date)}</span>
+        </div>
+        <ul class="tl-list">${notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>
+      </div>`;
+    }).join('');
+  }
+
+  // Реальна кількість ефектів у прошивці — щоб не було вигаданих "30+"
+  function paintFxCount() {
+    const n = FX.ok ? FX.EFFECTS.filter((e) => !e.hidden).length : 0;
+    $$('[data-fx-count]').forEach((el) => { el.textContent = n ? String(n) : '30+'; });
   }
 
   const rel = (LAMP.releases || [])[0] || {};
@@ -431,6 +534,29 @@
       applyLang();
     }));
     applyLang();
+
+    // Мобільне меню
+    const burger = $('#burger'), mnav = $('#mnav');
+    if (burger && mnav) {
+      const closeMnav = () => {
+        burger.setAttribute('aria-expanded', 'false');
+        mnav.hidden = true;
+        document.body.classList.remove('mnav-open');
+      };
+      burger.addEventListener('click', () => {
+        const open = burger.getAttribute('aria-expanded') === 'true';
+        burger.setAttribute('aria-expanded', String(!open));
+        mnav.hidden = open;
+        document.body.classList.toggle('mnav-open', !open);
+      });
+      mnav.addEventListener('click', (e) => { if (e.target.closest('a')) closeMnav(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMnav(); });
+      window.addEventListener('resize', () => { if (window.innerWidth > 960) closeMnav(); });
+      // закриваємо при кліку поза меню
+      document.addEventListener('click', (e) => {
+        if (!mnav.hidden && !e.target.closest('#mnav') && !e.target.closest('#burger')) closeMnav();
+      });
+    }
 
     $('#btn-dl').addEventListener('click', download);
     $('#hash-in').addEventListener('input', verifyInput);

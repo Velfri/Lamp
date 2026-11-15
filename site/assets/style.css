@@ -103,6 +103,7 @@ header.nav.stuck { border-bottom-color: var(--line); background: rgba(11, 9, 7, 
 .brand { display: flex; align-items: center; gap: 11px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
 .brand:hover { text-decoration: none; color: var(--text); }
 .brand img { width: 32px; height: 32px; border-radius: 9px; box-shadow: 0 0 0 1px var(--line2); }
+.brand-txt { display: flex; flex-direction: column; line-height: 1.15; }
 .brand b { font-size: 16px; }
 .brand small { display: block; font-size: 11px; font-weight: 500; color: var(--faint); letter-spacing: 0.02em; }
 .nav-links { display: flex; gap: 4px; margin-left: auto; }
@@ -524,7 +525,10 @@ footer { border-top: 1px solid var(--line); padding: 34px 0 44px; margin-top: 30
   .api-row { grid-template-columns: 46px 1fr; }
   .api-row span { grid-column: 1 / -1; }
 }
+.cards-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
 @media (max-width: 620px) {
+  .cards-2 { grid-template-columns: 1fr; }
   .wrap { width: min(1180px, 100% - 28px); }
   .hero { padding-top: 38px; }
   .cards { grid-template-columns: 1fr; }
@@ -545,3 +549,126 @@ footer { border-top: 1px solid var(--line); padding: 34px 0 44px; margin-top: 30
 /* версія у бейджі hero */
 .ver-inline { font-family: var(--mono); font-size: 11.5px; color: var(--acc2); }
 .eyebrow b:empty { display: none; }
+
+/* ============ Галерея ефектів ============ */
+.fx-wall{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(132px,1fr));
+  gap:10px;
+}
+.fx-chip{
+  position:relative;
+  display:flex;align-items:center;gap:9px;
+  padding:11px 13px;
+  border-radius:13px;
+  border:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015));
+  font:inherit;font-size:.9rem;color:var(--fg);
+  cursor:pointer;
+  transition:transform .18s ease,border-color .18s ease,background .18s ease;
+  text-align:left;
+}
+.fx-chip:hover{transform:translateY(-2px);border-color:rgba(255,180,84,.45)}
+.fx-chip.on{border-color:var(--acc);background:rgba(255,180,84,.1);color:var(--acc)}
+.fx-dot{
+  width:9px;height:9px;flex:0 0 9px;border-radius:50%;
+  background:var(--dot,var(--acc));
+  box-shadow:0 0 10px var(--dot,var(--acc));
+}
+
+/* ============ Таймлайн версій ============ */
+.timeline{position:relative;padding-left:22px}
+.timeline::before{
+  content:"";position:absolute;left:5px;top:6px;bottom:6px;width:2px;
+  background:linear-gradient(180deg,var(--acc),rgba(255,180,84,.08));
+  border-radius:2px;
+}
+.tl-item{position:relative;padding:0 0 26px 4px}
+.tl-item:last-child{padding-bottom:0}
+.tl-item::before{
+  content:"";position:absolute;left:-21px;top:5px;
+  width:12px;height:12px;border-radius:50%;
+  background:var(--bg);border:2px solid var(--acc);
+  box-shadow:0 0 0 4px rgba(255,180,84,.1);
+}
+.tl-top{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:9px}
+.tl-ver{font-weight:700;font-size:1.05rem;letter-spacing:.01em}
+.tl-tag{
+  font-size:.7rem;text-transform:uppercase;letter-spacing:.09em;
+  padding:2px 8px;border-radius:999px;
+  background:rgba(255,180,84,.13);color:var(--acc);border:1px solid rgba(255,180,84,.28);
+}
+.tl-date{font-size:.82rem;color:var(--mut)}
+.tl-list{margin:0;padding:0;list-style:none;display:grid;gap:6px}
+.tl-list li{position:relative;padding-left:19px;font-size:.92rem;color:var(--fg2,var(--fg));line-height:1.5}
+.tl-list li::before{content:"—";position:absolute;left:0;color:var(--acc);opacity:.75}
+
+/* ============ Сповіщення ============ */
+.toast{
+  position:fixed;left:50%;bottom:26px;z-index:90;
+  transform:translate(-50%,16px);
+  max-width:min(92vw,420px);
+  padding:12px 18px;border-radius:12px;
+  background:rgba(20,16,12,.96);
+  border:1px solid rgba(255,180,84,.4);
+  color:var(--fg);font-size:.9rem;line-height:1.4;
+  box-shadow:0 12px 34px rgba(0,0,0,.55);
+  opacity:0;pointer-events:none;
+  transition:opacity .22s ease,transform .22s ease;
+}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ============ Бургер і мобільне меню ============ */
+.burger{
+  display:none;flex-direction:column;justify-content:center;gap:4px;
+  width:40px;height:36px;padding:0 9px;
+  border-radius:10px;border:1px solid var(--line2,var(--line));
+  background:rgba(255,255,255,.03);cursor:pointer;
+}
+.burger span{
+  display:block;height:2px;border-radius:2px;background:var(--text,var(--fg));
+  transition:transform .22s ease,opacity .18s ease;
+}
+.burger[aria-expanded="true"] span:nth-child(1){transform:translateY(6px) rotate(45deg)}
+.burger[aria-expanded="true"] span:nth-child(2){opacity:0}
+.burger[aria-expanded="true"] span:nth-child(3){transform:translateY(-6px) rotate(-45deg)}
+
+.mnav{
+  position:fixed;inset:64px 0 auto;z-index:78;
+  display:flex;flex-direction:column;
+  padding:10px 14px 16px;
+  background:rgba(11,9,7,.98);
+  border-bottom:1px solid var(--line);
+  box-shadow:0 18px 40px rgba(0,0,0,.5);
+  animation:mnavIn .2s ease;
+}
+@keyframes mnavIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.mnav[hidden]{display:none}
+.mnav a{
+  padding:13px 8px;font-size:1rem;color:var(--text,var(--fg));
+  border-bottom:1px solid rgba(255,255,255,.05);
+  text-decoration:none;
+}
+.mnav a:last-child{border-bottom:0;color:var(--acc)}
+.mnav a:hover{color:var(--acc)}
+body.mnav-open{overflow:hidden}
+
+/* ============ Швидкий старт ============ */
+.quick{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;
+  margin:0;padding:0;list-style:none;counter-reset:q;
+}
+.q-step{
+  position:relative;padding:20px 20px 20px;
+  border-radius:16px;border:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012));
+}
+.q-num{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:30px;height:30px;margin-bottom:12px;border-radius:50%;
+  background:rgba(255,180,84,.14);border:1px solid rgba(255,180,84,.4);
+  color:var(--acc);font-weight:700;font-size:.9rem;
+}
+.q-step h3{margin:0 0 7px;font-size:1rem}
+.q-step p{margin:0;font-size:.9rem;line-height:1.55;color:var(--faint,var(--mut))}
+@media (max-width: 860px){ .quick{grid-template-columns:1fr} }
