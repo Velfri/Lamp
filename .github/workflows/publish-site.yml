@@ -166,6 +166,36 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # Pages може бути не увімкнено — тоді деплой падає з незрозумілою 404.
+      # Перевіряємо заздалегідь і, якщо вимкнено, не валимо збірку, а даємо інструкцію.
+      - name: Check GitHub Pages is enabled
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${{ github.repository }}/pages" > /dev/null 2>&1; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "✅ GitHub Pages увімкнено"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=GitHub Pages не увімкнено::Сайт зібрано, але не опубліковано. Увімкніть: Settings → Pages → Source: GitHub Actions (https://github.com/${{ github.repository }}/settings/pages)"
+          fi
+
       - name: Deploy to GitHub Pages
         id: deployment
+        if: steps.pages.outputs.enabled == 'true'
         uses: actions/deploy-pages@v4
+
+      - name: Explain what to do when Pages is off
+        if: steps.pages.outputs.enabled != 'true'
+        run: |
+          {
+            echo "### ⚠️ Сайт зібрано, але GitHub Pages вимкнено"
+            echo ""
+            echo "Прошивку \`.bin\` і сайт зібрано успішно — вони лежать в **Artifacts** цього запуску."
+            echo ""
+            echo "Щоб опублікувати сайт:"
+            echo "1. Відкрийте [Settings → Pages](https://github.com/${{ github.repository }}/settings/pages)"
+            echo "2. **Source** → виберіть **GitHub Actions** → Save"
+            echo "3. Перезапустіть деплой: \`gh run rerun ${{ github.run_id }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
