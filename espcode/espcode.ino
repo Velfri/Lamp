@@ -508,13 +508,13 @@ static bool otaDownloadToFlash(const String& url, String& err, uint32_t& calcula
   ota.phase = "download";
   mbedtls_sha256_context sha;
   mbedtls_sha256_init(&sha);
-  mbedtls_sha256_starts_ret(&sha, 0);
+  mbedtls_sha256_starts(&sha, 0);
   while (stream->connected() && total < (uint32_t)len) {
     size_t avail = stream->available();
     if (!avail) { delay(2); continue; }
     int n = stream->readBytes(buf, avail > 2048 ? 2048 : avail);
     if (n <= 0) continue;
-    mbedtls_sha256_update_ret(&sha, buf, n);
+    mbedtls_sha256_update(&sha, buf, n);
     if (Update.write(buf, n) != (size_t)n) { free(buf); mbedtls_sha256_free(&sha); http.end(); err = "flash"; return false; }
     total += n;
     int pct = 15 + (int)(total * 75.0f / len);   // 15..90 %
@@ -526,7 +526,7 @@ static bool otaDownloadToFlash(const String& url, String& err, uint32_t& calcula
   if (ota.size && total != (uint32_t)ota.size) { mbedtls_sha256_free(&sha); err = "size"; return false; }
 
   uint8_t digest[32];
-  mbedtls_sha256_finish_ret(&sha, digest);
+  mbedtls_sha256_finish(&sha, digest);
   mbedtls_sha256_free(&sha);
   if (ota.sha256.length() == 64) {
     String hex;

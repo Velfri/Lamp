@@ -54,6 +54,11 @@ python3 -m http.server 8000 -d site  # локальний перегляд
 arduino-cli compile --fqbn esp32:esp32:esp32c3:CDCOnBoot=cdc,PartitionScheme=min_spiffs --output-dir build espcode
 ```
 
+> **Версія ядра ESP32.** Код сумісний і з ядром **3.x** (mbedtls 3.x, функції
+> `mbedtls_sha256_starts/update/finish`), і з **2.x** — не використовуйте
+> застарілі варіанти з суфіксом `_ret`, їх у mbedtls 3 прибрали. CI перевіряє
+> це окремим лінтом до компіляції.
+
 Після зміни вебзастосунку перезберіть його у прошивку:
 
 ```bash

@@ -58,6 +58,48 @@ jobs:
           cd espcode
           [ -f secrets.h ] || cp secrets.example.h secrets.h
 
+      - name: Lint firmware (gzip-ассети, версія, сумісність mbedtls)
+        run: |
+          python3 - <<'PY'
+          import re, sys, gzip
+          src = open('espcode/espcode.ino', encoding='utf-8').read()
+          errs = []
+
+          # 1) mbedtls 3.x (ESP32 core >= 3.0) прибрав функції з суфіксом _ret.
+          #    Такі виклики ламають збірку — ловимо до компіляції, з підказкою.
+          for fn in re.findall(r'\b(mbedtls_\w+_ret)\s*\(', src):
+              errs.append(f'{fn}() не існує в mbedtls 3.x — приберіть суфікс _ret')
+
+          # 2) Версія у прошивці має збігатися з тією, що очікує сайт
+          m = re.search(r'#define\s+FW_VERSION\s+"([^"]+)"', src)
+          if m:
+              import json, os
+              print(f'FW_VERSION = {m.group(1)}')
+          else:
+              errs.append('не знайдено #define FW_VERSION')
+
+          for e in errs:
+              print(f'::error::{e}')
+          sys.exit(1 if errs else 0)
+          PY
+
+      - name: Verify embedded web assets are gzip
+        run: |
+          python3 - <<'PY'
+          import re, sys
+          h = open('espcode/web_assets.h', encoding='utf-8').read()
+          # кожен ассет має починатися з 0x1f, 0x8b (магія gzip) — інакше лампа віддасть сміття
+          blocks = re.findall(r'static const uint8_t asset_\d+\[\] PROGMEM = \{\s*\n\s*0x([0-9a-f]{2}),\s*0x([0-9a-f]{2}),', h)
+          bad = [b for b in blocks if b != ('1f', '8b')]
+          print(f'ассетів: {len(blocks)}, не gzip: {len(bad)}')
+          if bad:
+              print('::error::web_assets.h містить нестиснуті дані — перегенеруйте tools/gen_web_assets.py')
+              sys.exit(1)
+          if not blocks:
+              print('::error::web_assets.h не містить ассетів')
+              sys.exit(1)
+          PY
+
       - name: Compile firmware (esp32c3)
         run: |
           mkdir -p build
