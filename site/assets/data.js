@@ -35,7 +35,7 @@ window.LAMP = {
         ],
         en: [
           'PWA app stored in the lamp’s own flash: works without internet',
-          '30+ effects with scale, speed and custom palettes',
+          '34 effects with scale, speed and custom palettes',
           'On-lamp on/off schedule and the “Sunrise” alarm',
           'Over-the-air updates (OTA): from a file or straight from this site',
           'Automatic check and download of updates from this site',
@@ -48,7 +48,7 @@ window.LAMP = {
   features: [
     {
       icon: 'fx',
-      title: { uk: '30+ ефектів', en: '30+ effects' },
+      title: { uk: '34 ефекти', en: '34 effects' },
       text: {
         uk: 'Вогонь, аврора, океан, матриця, феєрверк, свічка… усі — з швидкістю, масштабом і власними кольорами.',
         en: 'Fire, aurora, ocean, matrix, fireworks, candle… all with speed, scale and custom colors.',
