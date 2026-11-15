@@ -22,8 +22,8 @@ window.LAMP = {
       version: '2.1.0',
       date: '2026-11-15',
       file: 'releases/smart-lamp-2.1.0.bin',
-      size: null,
-      sha256: null,
+      size: 1294432,
+      sha256: 'e9ead2a4fa60e2802995c796ae886b6739d8896d3e0989d00913b104e5c83272',
       notes: {
         uk: [
           'PWA-застосунок просто у флеш-пам’яті лампи: працює без інтернету',
@@ -95,6 +95,20 @@ window.LAMP = {
       },
     },
   ],
+
+  // Швидкий старт: три кроки від коробки до світла
+  quick: {
+    uk: [
+      { h: 'Купити плату й стрічку', p: 'ESP32-C3 Super Mini, стрічка WS2812B (1–1024 діоди) і блок живлення 5 В / 2 А.' },
+      { h: 'Прошити один раз по USB', p: 'Arduino IDE, ядро ESP32, бібліотека Adafruit NeoPixel — і файл espcode.ino з репозиторію.' },
+      { h: 'Далі — лише браузер', p: 'Лампа піднімає власний вебсервер на smart-lamp.local. Оновлення приходять із цього сайту самі.' },
+    ],
+    en: [
+      { h: 'Get the board and strip', p: 'ESP32-C3 Super Mini, a WS2812B strip (1–1024 LEDs) and a 5 V / 2 A power supply.' },
+      { h: 'Flash once over USB', p: 'Arduino IDE, ESP32 core, Adafruit NeoPixel library — and espcode.ino from the repository.' },
+      { h: 'After that, just a browser', p: 'The lamp runs its own web server at smart-lamp.local. Updates arrive from this site by themselves.' },
+    ],
+  },
 
   specs: [
     { k: { uk: 'Мікроконтролер', en: 'Microcontroller' }, v: { uk: 'ESP32-C3 Super Mini, RISC-V 160 МГц', en: 'ESP32-C3 Super Mini, RISC-V 160 MHz' } },

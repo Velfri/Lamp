@@ -43,15 +43,21 @@
   <div class="wrap nav-in">
     <a class="brand" href="#top">
       <img src="assets/icon-192.png" alt="" width="32" height="32">
-      <span><b>Smart Lamp</b><small data-i18n="brand.sub"></small></span>
+      <span class="brand-txt"><b>Smart Lamp</b><small data-i18n="brand.sub"></small></span>
     </a>
     <nav class="nav-links" aria-label="Main">
+      <a href="#start" data-i18n="nav.start"></a>
       <a href="#features" data-i18n="nav.features"></a>
+      <a href="#gallery" data-i18n="nav.gallery"></a>
       <a href="#update" data-i18n="nav.update"></a>
       <a href="#install" data-i18n="nav.install"></a>
+      <a href="#specs" data-i18n="nav.specs"></a>
       <a href="#faq" data-i18n="nav.faq"></a>
       <a href="#api" data-i18n="nav.api"></a>
     </nav>
+    <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="mnav" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
     <div class="lang" role="group" aria-label="Language">
       <button type="button" data-lang="uk" aria-pressed="true">UA</button>
       <button type="button" data-lang="en" aria-pressed="false">EN</button>
@@ -62,6 +68,20 @@
   </div>
 </header>
 
+<!-- Мобільне меню -->
+<div class="mnav" id="mnav" hidden>
+  <a href="#start" data-i18n="nav.start"></a>
+  <a href="#features" data-i18n="nav.features"></a>
+  <a href="#gallery" data-i18n="nav.gallery"></a>
+  <a href="#changelog" data-i18n="nav.changelog"></a>
+  <a href="#update" data-i18n="nav.update"></a>
+  <a href="#install" data-i18n="nav.install"></a>
+  <a href="#specs" data-i18n="nav.specs"></a>
+  <a href="#faq" data-i18n="nav.faq"></a>
+  <a href="#api" data-i18n="nav.api"></a>
+  <a href="https://github.com/Velfri/Lamp" target="_blank" rel="noopener">GitHub</a>
+</div>
+
 <main id="top">
 
   <!-- ================= HERO ================= -->
@@ -69,7 +89,7 @@
     <div class="wrap hero-grid">
       <div>
         <span class="eyebrow"><i></i><span data-i18n="hero.badge"></span>&nbsp;<b class="ver-inline" id="badge-ver"></b></span>
-        <h1><span data-i18n="hero.h1a"></span> <span class="glow" data-i18n="hero.h1b"></span></h1>
+        <h1><span data-i18n="hero.h1"></span></h1>
         <p class="lede" data-i18n-html="hero.lede"></p>
         <div class="hero-cta">
           <a class="btn primary lg" href="#update">
@@ -81,7 +101,7 @@
         </div>
         <div class="hero-meta">
           <span><svg class="i"><use href="#i-chip"/></svg>ESP32-C3</span>
-          <span><svg class="i"><use href="#i-fx"/></svg><b id="m-fx">30+</b>&nbsp;<span data-i18n="hero.meta.fx"></span></span>
+          <span><svg class="i"><use href="#i-fx"/></svg><b id="m-fx" data-fx-count>30+</b>&nbsp;<span data-i18n="hero.meta.fx"></span></span>
           <span><svg class="i"><use href="#i-shield"/></svg><span data-i18n="hero.meta.ota"></span></span>
           <span class="ver-badge" id="m-ver">v2.1.0</span>
         </div>
@@ -103,10 +123,24 @@
     <div class="wrap">
       <div class="strip">
         <div><b>50</b><small data-i18n="strip.fps"></small></div>
-        <div><b>30+</b><small data-i18n="strip.fx"></small></div>
+        <div><b data-fx-count>30+</b><small data-i18n="strip.fx"></small></div>
         <div><b>1024</b><small data-i18n="strip.leds"></small></div>
         <div><b>0</b><small data-i18n="strip.cloud"></small></div>
       </div>
+    </div>
+  </section>
+
+  <!-- ================= ШВИДКИЙ СТАРТ ================= -->
+  <section id="start" class="tight">
+    <div class="wrap">
+      <div class="sec-head">
+        <div>
+          <div class="sec-kicker" data-i18n="start.kicker"></div>
+          <h2 data-i18n="start.h2"></h2>
+          <p class="sec-sub" data-i18n="start.sub"></p>
+        </div>
+      </div>
+      <ol class="quick" id="quick-steps"></ol>
     </div>
   </section>
 
@@ -121,6 +155,36 @@
         </div>
       </div>
       <div class="cards" id="feature-cards"></div>
+    </div>
+  </section>
+
+  <!-- ================= ГАЛЕРЕЯ ЕФЕКТІВ ================= -->
+  <section id="gallery" class="tight">
+    <div class="wrap">
+      <div class="sec-head">
+        <div>
+          <div class="sec-kicker" data-i18n="gallery.kicker"></div>
+          <h2 data-i18n="gallery.h2"></h2>
+          <p class="sec-sub" data-i18n="gallery.sub"></p>
+        </div>
+      </div>
+      <div class="fx-wall" id="fx-wall"></div>
+    </div>
+  </section>
+
+  <!-- ================= ІСТОРІЯ ВЕРСІЙ ================= -->
+  <section id="changelog" class="tight">
+    <div class="wrap">
+      <div class="sec-head">
+        <div>
+          <div class="sec-kicker" data-i18n="changelog.kicker"></div>
+          <h2 data-i18n="changelog.h2"></h2>
+        </div>
+        <a class="ghost" href="https://github.com/Velfri/Lamp/releases" target="_blank" rel="noopener">
+          <svg class="i"><use href="#i-gh"/></svg><span data-i18n="changelog.all"></span>
+        </a>
+      </div>
+      <div class="timeline" id="changelog-list"></div>
     </div>
   </section>
 
@@ -171,7 +235,7 @@
         </div>
       </div>
 
-      <div class="cards" style="margin-top:16px;grid-template-columns:repeat(2,minmax(0,1fr))">
+      <div class="cards cards-2" style="margin-top:16px">
         <div class="card">
           <h3 data-i18n="update.auto.h"></h3>
           <p data-i18n-html="update.auto.p"></p>
