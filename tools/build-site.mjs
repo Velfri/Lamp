@@ -17,7 +17,17 @@ import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const site = path.join(root, 'site');
+// Тека сайту: змінна SITE_DIR, інакше site/, інакше docs/ (для GitHub Pages «main / docs»)
+const pickSite = () => {
+  const env = process.env.SITE_DIR;
+  const candidates = [env, 'site', 'docs'].filter(Boolean);
+  for (const c of candidates) {
+    const p = path.isAbsolute(c) ? c : path.join(root, c);
+    if (fs.existsSync(path.join(p, 'index.html'))) return p;
+  }
+  return path.join(root, env || 'site');
+};
+const site = pickSite();
 const read = (p) => fs.readFileSync(p, 'utf8');
 const write = (p, s) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, s); };
 const log = (...a) => console.log('[site]', ...a);
@@ -70,7 +80,7 @@ window.FX_EN = {${fxEnBody}};
   if (!Array.isArray(list) || !list.length) throw new Error('Ефекти не розпізнані');
 
   write(path.join(site, 'assets', 'effects.js'), out);
-  log(`ефекти: ${list.length} шт. -> site/assets/effects.js`);
+  log(`ефекти: ${list.length} шт. -> ${path.relative(root, path.join(site, 'assets', 'effects.js'))}`);
   return list.map((e) => e && e.id).filter(Boolean);
 }
 
@@ -99,7 +109,7 @@ function buildManifest() {
     })),
   };
   write(path.join(site, 'releases', 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
-  log(`маніфест: ${manifest.releases.length} версія(і) -> site/releases/manifest.json`);
+  log(`маніфест: ${manifest.releases.length} версія(і) -> ${path.relative(root, path.join(site, 'releases', 'manifest.json'))}`);
   syncDataReleases(manifest);
   return manifest;
 }
@@ -136,4 +146,4 @@ function checkLinks() {
 buildEffects();
 buildManifest();
 checkLinks();
-log('готово');
+log('готово: ' + path.relative(root, site) + '/');

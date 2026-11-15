@@ -7,7 +7,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const idxPath = path.join(root, 'site', 'releases', 'index.json');
+const siteDir = (() => {
+  const env = process.env.SITE_DIR;
+  for (const c of [env, 'site', 'docs'].filter(Boolean)) {
+    const p = path.isAbsolute(c) ? c : path.join(root, c);
+    if (fs.existsSync(path.join(p, 'index.html'))) return p;
+  }
+  return path.join(root, env || 'site');
+})();
+const idxPath = path.join(siteDir, 'releases', 'index.json');
 
 const args = {};
 for (let i = 2; i < process.argv.length; i += 2) {

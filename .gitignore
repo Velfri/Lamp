@@ -9,3 +9,6 @@ espcode/secrets.h
 # тимчасове
 .DS_Store
 node_modules/
+
+# готові архіви для завантаження
+dist/
