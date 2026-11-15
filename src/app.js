@@ -2,7 +2,7 @@
 // Інтерфейс: стан, сцени, розклад, вкладки, жести. Рушій (годинник, WebGL, кадр) - у sketch.js, ефекти - в effects.js.
 
 // ---------- стан, збереження ----------
-const VERSION = '20';
+const VERSION = '21';
 const curvePower = (c) => (c === 'soft' ? 0.7 : c === 'precise' ? 1.8 : 1);
 const SWATCHES = ['#ff3b3b', '#ff7420', '#ffb020', '#ffe066', '#7cf06b', '#16d6a0', '#19c8e8', '#3b82f6', '#8b5cf6', '#c026d3', '#ff4778', '#fff1e0'];
 const PALETTES = [['#ff4d2e', '#ffb347', '#7b2ff7'], ['#0b3d91', '#19c8e8', '#e0fbfc'], ['#ff2bd6', '#7c3aed', '#22d3ee'], ['#0f3d2e', '#3ddc84', '#d9f99d'], ['#7a0c0c', '#ff6a00', '#ffd23b'], ['#dbeafe', '#60a5fa', '#a78bfa']];

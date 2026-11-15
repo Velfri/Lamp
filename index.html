@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="uk">
 <head>
 <meta charset="UTF-8">
@@ -1369,7 +1369,7 @@ input.grad::-webkit-slider-thumb {
   <div id="mini-slot"></div>
   <div class="title"><b id="lamp-title"></b><small id="now"></small></div>
   <div class="top-act">
-   <button id="install-quick" class="rb" type="button" aria-label="Р’СЃС‚Р°РЅРѕРІРёС‚Рё" title="Р’СЃС‚Р°РЅРѕРІРёС‚Рё Р·Р°СЃС‚РѕСЃСѓРЅРѕРє" hidden><svg class="i"><use href="#i-install"/></svg></button>
+   <button id="install-quick" class="rb" type="button" aria-label="Встановити" title="Встановити застосунок" hidden><svg class="i"><use href="#i-install"/></svg></button>
    <button id="save-quick" class="rb" type="button" data-i18n-label="qa.save"><svg class="i"><use href="#i-save"/></svg></button>
    <button id="power" class="rb" type="button" aria-pressed="true" aria-label="Power"><svg class="i"><use href="#i-power"/></svg></button>
    <button id="close" class="rb" type="button" data-i18n-label="common.back"><svg class="i"><use href="#i-close"/></svg></button>
@@ -1490,7 +1490,7 @@ input.grad::-webkit-slider-thumb {
       <div class="seg" id="seg-quick-leds" style="margin-top:8px">
        <button type="button" data-leds="20">20 LED</button>
        <button type="button" data-leds="60">60 LED</button>
-       <button type="button" data-leds="256">16Г—16 (256)</button>
+       <button type="button" data-leds="256">16×16 (256)</button>
       </div>
       <p class="hint" data-i18n="hw.hint"></p>
      </div>
@@ -1519,7 +1519,7 @@ input.grad::-webkit-slider-thumb {
     </div>
     <div class="set-sec">
      <h3 data-i18n="set.lang"></h3>
-     <div class="seg" data-lang-seg><button type="button" data-lang="uk">РЈРєСЂР°С—РЅСЃСЊРєР°</button><button type="button" data-lang="en">English</button></div>
+     <div class="seg" data-lang-seg><button type="button" data-lang="uk">Українська</button><button type="button" data-lang="en">English</button></div>
     </div>
     <div class="set-sec">
      <h3 data-i18n="set.bri"></h3>
@@ -1670,7 +1670,7 @@ Object.assign(I18N.uk, {
   'upd.avail': 'Є нова версія {v}', 'upd.avail.d': 'Зараз встановлено {c}.', 'upd.start': 'Оновити',
   'upd.dl': 'Завантаження', 'upd.write': 'Встановлення', 'upd.reboot': 'Перезапуск лампи', 'upd.keep': 'Не вимикайте лампу від живлення.',
   'upd.done': 'Оновлено до {v}', 'upd.done.d': 'Лампа перезапустилась і готова.', 'upd.ok': 'Готово',
-  'upd.err': 'Не вдалося оновити', 'upd.retry': 'Спробувати ще раз',
+  'upd.err': 'Не вдалося оновити', 'upd.retry': 'Спробувати ще раз', 'upd.offline': 'Лампа не має доступу до сайту оновлень. Перевірте інтернет на лампі.',
   'upd.sim': 'Лампа не підключена: це демонстрація оновлення.',
   'inst.title': 'Додати на головний екран', 'inst.btn': 'Встановити застосунок',
   'inst.ios': 'Натисніть «Поділитися» в Safari, потім «На початковий екран».',
@@ -1695,7 +1695,7 @@ Object.assign(I18N.en, {
   'upd.avail': 'New version {v}', 'upd.avail.d': 'Installed now: {c}.', 'upd.start': 'Update',
   'upd.dl': 'Downloading', 'upd.write': 'Installing', 'upd.reboot': 'Restarting the lamp', 'upd.keep': 'Keep the lamp powered.',
   'upd.done': 'Updated to {v}', 'upd.done.d': 'The lamp restarted and is ready.', 'upd.ok': 'Done',
-  'upd.err': 'Update failed', 'upd.retry': 'Try again',
+  'upd.err': 'Update failed', 'upd.retry': 'Try again', 'upd.offline': 'The lamp cannot reach the update site. Check its internet connection.',
   'upd.sim': 'No lamp connected: this is an update demo.',
   'inst.title': 'Add to home screen', 'inst.btn': 'Install app',
   'inst.ios': 'Tap Share in Safari, then Add to Home Screen.',
@@ -2622,14 +2622,18 @@ function frame(now) {
   const set = (s) => { st = s; render(); };
 
   async function check(silent) {
-    if (busy) return; set('checking'); setProgress(0);
+    if (busy) return;
+    if (!silent) { set('checking'); setProgress(0); }
     try {
       if (live()) {
         const r = await fetch('/api/update/check', { cache: 'no-store' }); if (!r.ok) throw new Error('HTTP ' + r.status);
         info = await r.json();
+        if (info.offline) { if (!silent) { err = t('upd.offline'); set('error'); } return; }
       } else { await sleep(1400); info = { current: curVer(), latest: '1.1.0', notes: ['Нові ефекти', 'Розклад вмикання й вимикання', 'Швидша робота Wi-Fi'] }; }
       const newer = info.latest && info.latest !== info.current && info.latest !== curVer();
-      set(newer ? 'available' : 'uptodate');
+      // тиха перевірка не має перебивати екран, на якому користувач уже щось робить
+      if (!silent || st === 'idle' || st === 'checking') set(newer ? 'available' : 'uptodate');
+      else if (newer) { st = 'available'; render(); }
     } catch (e) { if (silent) set('idle'); else { err = String(e.message || e); set('error'); } }
   }
 
@@ -2711,7 +2715,7 @@ function frame(now) {
 // Інтерфейс: стан, сцени, розклад, вкладки, жести. Рушій (годинник, WebGL, кадр) - у sketch.js, ефекти - в effects.js.
 
 // ---------- стан, збереження ----------
-const VERSION = '20';
+const VERSION = '21';
 const curvePower = (c) => (c === 'soft' ? 0.7 : c === 'precise' ? 1.8 : 1);
 const SWATCHES = ['#ff3b3b', '#ff7420', '#ffb020', '#ffe066', '#7cf06b', '#16d6a0', '#19c8e8', '#3b82f6', '#8b5cf6', '#c026d3', '#ff4778', '#fff1e0'];
 const PALETTES = [['#ff4d2e', '#ffb347', '#7b2ff7'], ['#0b3d91', '#19c8e8', '#e0fbfc'], ['#ff2bd6', '#7c3aed', '#22d3ee'], ['#0f3d2e', '#3ddc84', '#d9f99d'], ['#7a0c0c', '#ff6a00', '#ffd23b'], ['#dbeafe', '#60a5fa', '#a78bfa']];

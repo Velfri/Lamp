@@ -1,0 +1,11 @@
+# збірка прошивки
+build/
+*.bin
+!site/releases/*.bin
+
+# секрети Wi-Fi
+espcode/secrets.h
+
+# тимчасове
+.DS_Store
+node_modules/

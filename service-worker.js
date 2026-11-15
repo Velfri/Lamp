@@ -1,4 +1,4 @@
-const CACHE_NAME = 'smart-lamp-v20';
+const CACHE_NAME = 'smart-lamp-v21';
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();

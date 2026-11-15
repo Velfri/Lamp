@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$ws = "c:\Users\user\Desktop\smart-lamp-v20"
+$ws = $PSScriptRoot
 $src = Join-Path $ws "src"
 
 $css = [System.IO.File]::ReadAllText((Join-Path $src "style.css"), [System.Text.Encoding]::UTF8)

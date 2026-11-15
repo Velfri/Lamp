@@ -48,14 +48,18 @@
   const set = (s) => { st = s; render(); };
 
   async function check(silent) {
-    if (busy) return; set('checking'); setProgress(0);
+    if (busy) return;
+    if (!silent) { set('checking'); setProgress(0); }
     try {
       if (live()) {
         const r = await fetch('/api/update/check', { cache: 'no-store' }); if (!r.ok) throw new Error('HTTP ' + r.status);
         info = await r.json();
+        if (info.offline) { if (!silent) { err = t('upd.offline'); set('error'); } return; }
       } else { await sleep(1400); info = { current: curVer(), latest: '1.1.0', notes: ['Нові ефекти', 'Розклад вмикання й вимикання', 'Швидша робота Wi-Fi'] }; }
       const newer = info.latest && info.latest !== info.current && info.latest !== curVer();
-      set(newer ? 'available' : 'uptodate');
+      // тиха перевірка не має перебивати екран, на якому користувач уже щось робить
+      if (!silent || st === 'idle' || st === 'checking') set(newer ? 'available' : 'uptodate');
+      else if (newer) { st = 'available'; render(); }
     } catch (e) { if (silent) set('idle'); else { err = String(e.message || e); set('error'); } }
   }
 
