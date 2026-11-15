@@ -9,13 +9,23 @@
 #include <ESPmDNS.h>
 #include <Preferences.h>
 #include <Adafruit_NeoPixel.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
+#include <mbedtls/sha256.h>
 #include <time.h>
 #include "secrets.h"
 #include "web_assets.h"
 #include "lamp_fx.h"
 
-#define FW_VERSION "2.0.0"
+#define FW_VERSION "2.1.0"
 #define DEV_CORS 1
+
+// Звідки лампа бере оновлення, коли має інтернет (сайт проєкту на GitHub Pages).
+// manifest.json містить версії, посилання на .bin і SHA-256.
+#define UPDATE_MANIFEST_URL "https://velfri.github.io/Lamp/releases/manifest.json"
+#define UPDATE_AUTO_INTERVAL_MS (6UL * 60UL * 60UL * 1000UL)  // авто-перевірка раз на 6 годин
+#define UPDATE_AUTO_RETRY_MS (15UL * 60UL * 1000UL)          // повтор при помилці — раз на 15 хвилин
+#define UPDATE_MAX_SIZE 0x3D0000                              // ~3.8 МБ — більше, ніж будь-який розділ
 
 const int STATUS_LED_PIN = 8;              // вбудований синій LED на C3 Super Mini
 const bool STATUS_LED_ACTIVE_LOW = true;
@@ -31,6 +41,7 @@ struct Config {
   uint32_t id;
   int ledPin;
   int ledCount;
+  bool autoUpdate;
 };
 
 Config cfg;
@@ -57,6 +68,22 @@ uint32_t lastWifiTry = 0;
 bool apModeActive = false;
 bool timeSynced = false;
 
+// ---------- Стан OTA ----------
+struct OtaState {
+  bool active = false;
+  const char* phase = "idle";  // idle | download | write | reboot | error | done
+  int progress = 0;             // 0..100
+  String error;
+  String latest;
+  String notes;
+  long size = 0;
+  String sha256;
+  uint32_t checkedAt = 0;
+  uint32_t nextAutoAt = 0;
+  bool autoUpdate = true;
+};
+OtaState ota;
+
 // Таймзона України (Київ: UTC+2 із переходом на літній час UTC+3)
 const char* TIMEZONE = "EET-2EEST,M3.5.0/3,M10.5.0/4";
 
@@ -72,6 +99,7 @@ void saveConfig() {
   prefs.putUInt("id", cfg.id);
   prefs.putInt("ledPin", cfg.ledPin);
   prefs.putInt("ledCount", cfg.ledCount);
+  prefs.putBool("autoUpdate", cfg.autoUpdate);
   prefs.end();
 }
 
@@ -194,6 +222,7 @@ String configJson() {
   s += ",\"id\":" + String(cfg.id);
   s += ",\"ledPin\":" + String(cfg.ledPin);
   s += ",\"ledCount\":" + String(cfg.ledCount);
+  s += ",\"autoupdate\":" + String(cfg.autoUpdate ? "true" : "false");
   s += ",\"allowedPins\":[";
   for (size_t i = 0; i < sizeof(ALLOWED_PINS) / sizeof(int); i++) {
     if (i) s += ",";
@@ -259,6 +288,11 @@ void handleConfigPost() {
   if (server.hasArg("ledCount")) {
     int c = server.arg("ledCount").toInt();
     if (c >= 1 && c <= 1024) next.ledCount = c;
+  }
+
+  if (server.hasArg("autoupdate")) {
+    String v = server.arg("autoupdate");
+    next.autoUpdate = (v == "1" || v == "true");
   }
 
   bool hwChanged = (next.ledPin != cfg.ledPin || next.ledCount != cfg.ledCount);
@@ -342,13 +376,261 @@ void handleTimePost() {
   sendJson(200, "{\"time\":\"" + getCurrentTimeString() + "\"}");
 }
 
-// ---------- Оновлення через веб (OTA) ----------
+// ---------- Оновлення по повітрю (OTA) ----------
+// Лампа перевіряє manifest.json на сайті проєкту (GitHub Pages), бачить там нову
+// версію, качає .bin по HTTPS і записує його в OTA-розділ. Усе без участі хмар.
+static void urlEncodeInto(String& out, const String& v) {
+  static const char* hex = "0123456789ABCDEF";
+  for (size_t i = 0; i < v.length(); i++) {
+    uint8_t c = (uint8_t)v[i];
+    if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') out += (char)c;
+    else { out += '%'; out += hex[c >> 4]; out += hex[c & 15]; }
+  }
+}
+
+// Витягує з JSON перший рядок-значення за ключем (манифест простий, парсер не потрібен)
+static bool jsonStr(const String& j, const char* key, String& out) {
+  String k = String("\"") + key + "\"";
+  int i = j.indexOf(k);
+  if (i < 0) return false;
+  i = j.indexOf(':', i + k.length());
+  if (i < 0) return false;
+  i = j.indexOf('"', i);
+  if (i < 0) return false;
+  int e = j.indexOf('"', i + 1);
+  if (e < 0) return false;
+  out = j.substring(i + 1, e);
+  return true;
+}
+
+static long jsonNum(const String& j, const char* key, long def) {
+  String k = String("\"") + key + "\"";
+  int i = j.indexOf(k);
+  if (i < 0) return def;
+  i = j.indexOf(':', i + k.length());
+  if (i < 0) return def;
+  i++;
+  while (i < (int)j.length() && (j[i] == ' ' || j[i] == '\t')) i++;
+  String n;
+  while (i < (int)j.length() && (isdigit(j[i]) || j[i] == '-')) n += j[i++];
+  return n.length() ? n.toInt() : def;
+}
+
+// Порівняння версій "x.y.z": true, якщо a новіша за b
+static bool versionNewer(const String& a, const String& b) {
+  int i = 0, j = 0;
+  while (i < (int)a.length() || j < (int)b.length()) {
+    long x = 0, y = 0;
+    while (i < (int)a.length() && isdigit(a[i])) x = x * 10 + (a[i++] - '0');
+    while (j < (int)b.length() && isdigit(b[j])) y = y * 10 + (b[j++] - '0');
+    if (x != y) return x > y;
+    while (i < (int)a.length() && !isdigit(a[i])) i++;
+    while (j < (int)b.length() && !isdigit(b[j])) j++;
+  }
+  return false;
+}
+
+// Перший запис у releases[] з новішою версією
+static bool manifestPickLatest(const String& j, String& ver, String& url, String& sha, long& size, String& notes) {
+  int rb = j.indexOf("\"releases\"");
+  if (rb < 0) return false;
+  rb = j.indexOf('[', rb);
+  if (rb < 0) return false;
+  int re = j.indexOf(']', rb);
+  if (re < 0) re = j.length();
+  int pos = rb;
+  while (true) {
+    int nb = j.indexOf('{', pos);
+    if (nb < 0 || nb > re) break;
+    int ne = j.indexOf('}', nb);
+    if (ne < 0 || ne > re) ne = re;
+    String obj = j.substring(nb, ne + 1);
+    String v;
+    if (jsonStr(obj, "version", v) && versionNewer(v, FW_VERSION)) {
+      String u, hh;
+      if (jsonStr(obj, "url", u)) {
+        jsonStr(obj, "sha256", hh);
+        long sz = jsonNum(obj, "size", 0);
+        ver = v; url = u; sha = hh; size = sz;
+        notes = "";
+        int nk = obj.indexOf("\"notes\"");
+        if (nk >= 0) {
+          int ab = obj.indexOf('[', nk);
+          int q = obj.indexOf('"', ab);
+          int q2 = q >= 0 ? obj.indexOf('"', q + 1) : -1;
+          if (q > 0 && q2 > q) notes = obj.substring(q + 1, q2);
+        }
+        return true;
+      }
+    }
+    pos = ne + 1;
+  }
+  return false;
+}
+
+static bool otaFetchManifest(String& body) {
+  WiFiClientSecure client;
+  client.setInsecure();  // GitHub Pages: без пінінгу сертифіката (публічні дані, цілісність — через SHA-256)
+  HTTPClient http;
+  http.setTimeout(12000);
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  String url = UPDATE_MANIFEST_URL;
+  url += "?t=";
+  url += String(millis());
+  if (!http.begin(client, url)) return false;
+  int code = http.GET();
+  if (code != HTTP_CODE_OK) { http.end(); return false; }
+  body = http.getString();
+  http.end();
+  return body.length() > 0;
+}
+
+// Качає .bin по HTTPS і пише в OTA-розділ, рахуючи SHA-256 «на льоту».
+// Якщо хеш у манифесті є й не збігається — запис скасовується.
+static bool otaDownloadToFlash(const String& url, String& err, uint32_t& calculated) {
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  http.setTimeout(20000);
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  if (!http.begin(client, url)) { err = "no-connect"; return false; }
+  int code = http.GET();
+  if (code != HTTP_CODE_OK) { http.end(); err = "http-" + String(code); return false; }
+  int len = http.getSize();
+  if (len <= 0) { http.end(); err = "no-size"; return false; }
+  if (len > UPDATE_MAX_SIZE) { http.end(); err = "too-big"; return false; }
+
+  if (!Update.begin(len)) { http.end(); err = "begin"; return false; }
+  WiFiClient* stream = http.getStreamPtr();
+  uint8_t* buf = (uint8_t*)malloc(2048);
+  if (!buf) { http.end(); err = "no-mem"; return false; }
+  uint32_t total = 0;
+  ota.phase = "download";
+  mbedtls_sha256_context sha;
+  mbedtls_sha256_init(&sha);
+  mbedtls_sha256_starts_ret(&sha, 0);
+  while (stream->connected() && total < (uint32_t)len) {
+    size_t avail = stream->available();
+    if (!avail) { delay(2); continue; }
+    int n = stream->readBytes(buf, avail > 2048 ? 2048 : avail);
+    if (n <= 0) continue;
+    mbedtls_sha256_update_ret(&sha, buf, n);
+    if (Update.write(buf, n) != (size_t)n) { free(buf); mbedtls_sha256_free(&sha); http.end(); err = "flash"; return false; }
+    total += n;
+    int pct = 15 + (int)(total * 75.0f / len);   // 15..90 %
+    ota.progress = pct;
+  }
+  free(buf);
+  http.end();
+  if (total != (uint32_t)len) { mbedtls_sha256_free(&sha); err = "short"; return false; }
+  if (ota.size && total != (uint32_t)ota.size) { mbedtls_sha256_free(&sha); err = "size"; return false; }
+
+  uint8_t digest[32];
+  mbedtls_sha256_finish_ret(&sha, digest);
+  mbedtls_sha256_free(&sha);
+  if (ota.sha256.length() == 64) {
+    String hex;
+    hex.reserve(64);
+    for (int i = 0; i < 32; i++) {
+      char b[3];
+      snprintf(b, sizeof(b), "%02x", digest[i]);
+      hex += b;
+    }
+    String expect = ota.sha256;
+    expect.toLowerCase();
+    if (hex != expect) {
+      Update.abort();
+      err = "sha256";
+      return false;
+    }
+    Serial.println("OTA: SHA-256 збігається");
+  }
+  calculated = total;
+  return true;
+}
+
+static void otaFail(const String& why) {
+  ota.phase = "error";
+  ota.error = why;
+  ota.active = false;
+  ota.nextAutoAt = millis() + UPDATE_AUTO_RETRY_MS;
+  Serial.printf("OTA: помилка — %s\n", why.c_str());
+}
+
+static void otaInstallAndRestart() {
+  ota.phase = "reboot";
+  ota.progress = 100;
+  if (!Update.end(true)) { otaFail("end"); return; }
+  ota.active = true;
+  delay(400);
+  ESP.restart();
+}
+
+// Ручний запуск: лампа сама качає оновлення з сайту
+void otaStartFromInternet() {
+  if (ota.active) return;
+  if (WiFi.status() != WL_CONNECTED) { otaFail("offline"); return; }
+  ota.active = true;
+  ota.error = "";
+  ota.progress = 0;
+  ota.phase = "download";
+  String body;
+  if (!otaFetchManifest(body)) { otaFail("manifest"); return; }
+  String ver, url, sha, notes;
+  long size = 0;
+  if (!manifestPickLatest(body, ver, url, sha, size, notes)) { ota.phase = "idle"; ota.active = false; return; }
+  ota.latest = ver; ota.notes = notes; ota.size = size; ota.sha256 = sha;
+  ota.progress = 15;
+  uint32_t written = 0;
+  String err;
+  if (!otaDownloadToFlash(url, err, written)) { otaFail(err); return; }
+  ota.progress = 95;
+  otaInstallAndRestart();
+}
+
 void handleUpdateCheck() {
-  sendJson(200, "{\"current\":\"" FW_VERSION "\",\"latest\":\"" FW_VERSION "\",\"notes\":[\"Стабільна версія 2.0.0 з PWA та оптимізованими ефектами\"]}");
+  ota.checkedAt = millis();
+  if (WiFi.status() != WL_CONNECTED) {
+    ota.nextAutoAt = millis() + UPDATE_AUTO_RETRY_MS;
+    sendJson(200, "{\"current\":\"" FW_VERSION "\",\"latest\":\"" FW_VERSION "\",\"offline\":true,\"notes\":[]}");
+    return;
+  }
+  String body;
+  if (!otaFetchManifest(body)) {
+    ota.nextAutoAt = millis() + UPDATE_AUTO_RETRY_MS;
+    sendJson(200, "{\"current\":\"" FW_VERSION "\",\"latest\":\"" FW_VERSION "\",\"offline\":true,\"notes\":[\"Немає зв'язку з сайтом оновлень\"]}");
+    return;
+  }
+  String ver, url, sha, notes;
+  long size = 0;
+  bool found = manifestPickLatest(body, ver, url, sha, size, notes);
+  String latest = found ? ver : FW_VERSION;
+  ota.latest = latest;
+  ota.notes = notes;
+  ota.size = size;
+  ota.sha256 = sha;
+  String j = "{\"current\":\"" FW_VERSION "\",\"latest\":\"" + latest + "\",\"notes\":[";
+  if (notes.length()) j += "\"" + jsonEscape(notes) + "\"";
+  j += "],\"size\":" + String(size);
+  if (found) j += ",\"sha256\":\"" + jsonEscape(sha) + "\"";
+  j += "}";
+  sendJson(200, j);
+  ota.nextAutoAt = millis() + UPDATE_AUTO_INTERVAL_MS;
+}
+
+void handleUpdateStart() {
+  if (ota.active) { sendJson(409, "{\"ok\":false,\"error\":\"busy\"}"); return; }
+  sendJson(202, "{\"ok\":true}");
+  otaStartFromInternet();
 }
 
 void handleUpdateStatus() {
-  sendJson(200, "{\"phase\":\"idle\",\"progress\":0}");
+  String j = "{\"phase\":\"" + String(ota.phase ? ota.phase : "idle") + "\",\"progress\":" + String(ota.progress ? ota.progress : 0);
+  j += ",\"current\":\"" FW_VERSION "\"";
+  if (ota.latest.length()) j += ",\"latest\":\"" + jsonEscape(ota.latest) + "\"";
+  if (ota.error.length()) j += ",\"error\":\"" + jsonEscape(ota.error) + "\"";
+  j += "}";
+  sendJson(200, j);
 }
 
 void handleUpdateDone() {
@@ -364,15 +646,37 @@ void handleUpload() {
   HTTPUpload& up = server.upload();
   if (up.status == UPLOAD_FILE_START) {
     Serial.printf("OTA початок: %s\n", up.filename.c_str());
-    if (!Update.begin(UPDATE_SIZE_UNKNOWN)) Update.printError(Serial);
+    ota.active = true; ota.progress = 0; ota.phase = "download"; ota.error = "";
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { Update.printError(Serial); otaFail("begin"); }
   } else if (up.status == UPLOAD_FILE_WRITE) {
-    if (Update.write(up.buf, up.currentSize) != up.currentSize) Update.printError(Serial);
+    if (Update.write(up.buf, up.currentSize) != up.currentSize) { Update.printError(Serial); otaFail("write"); }
+    else {
+      ota.phase = "write";
+      ota.progress = (int)(Update.progress() * 100 / (Update.size() ? Update.size() : 1));
+    }
   } else if (up.status == UPLOAD_FILE_END) {
-    if (Update.end(true)) Serial.printf("OTA успішно завершено (%u байт)\n", up.totalSize);
-    else Update.printError(Serial);
+    if (Update.end(true)) { Serial.printf("OTA успішно завершено (%u байт)\n", up.totalSize); ota.phase = "reboot"; ota.progress = 100; }
+    else { Update.printError(Serial); otaFail("end"); }
   } else if (up.status == UPLOAD_FILE_ABORTED) {
     Update.abort();
+    otaFail("aborted");
   }
+}
+
+// Викликається з loop(): автооновлення, коли лампа має інтернет і час синхронізовано
+void checkAutoUpdate() {
+  if (!ota.autoUpdate || ota.active) return;
+  if (WiFi.status() != WL_CONNECTED) return;
+  if (millis() < ota.nextAutoAt) return;
+  ota.nextAutoAt = millis() + UPDATE_AUTO_INTERVAL_MS;
+  String body;
+  if (!otaFetchManifest(body)) return;
+  String ver, url, sha, notes;
+  long size = 0;
+  if (!manifestPickLatest(body, ver, url, sha, size, notes)) return;
+  Serial.printf("OTA авто: доступна версія %s — оновлююсь\n", ver.c_str());
+  ota.latest = ver; ota.notes = notes; ota.size = size; ota.sha256 = sha;
+  otaStartFromInternet();
 }
 
 // ---------- Вивід на світлодіоди ----------
@@ -559,6 +863,8 @@ void setup() {
 
   loadConfig();
   loadState();
+  ota.autoUpdate = cfg.autoUpdate;
+  ota.nextAutoAt = millis() + 20000;   // перша авто-перевірка через 20 с після старту
   Serial.printf("Smart Lamp v%s (Пін %d, LED: %d)\n",
                 FW_VERSION, cfg.ledPin, cfg.ledCount);
   setupStrip();
@@ -584,11 +890,13 @@ void setup() {
   server.on("/api/state", HTTP_OPTIONS, handleOptions);
   server.on("/api/time", HTTP_OPTIONS, handleOptions);
   server.on("/api/update/check", HTTP_OPTIONS, handleOptions);
+  server.on("/api/update/start", HTTP_OPTIONS, handleOptions);
   server.on("/api/update/status", HTTP_OPTIONS, handleOptions);
   server.on("/api/update/upload", HTTP_OPTIONS, handleOptions);
 
   // Оновлення OTA
   server.on("/api/update/check", HTTP_GET, handleUpdateCheck);
+  server.on("/api/update/start", HTTP_POST, handleUpdateStart);
   server.on("/api/update/status", HTTP_GET, handleUpdateStatus);
   server.on("/api/update/upload", HTTP_POST, handleUpdateDone, handleUpload);
   server.on("/update", HTTP_POST, handleUpdateDone, handleUpload);
@@ -607,6 +915,7 @@ void loop() {
   server.handleClient();
   drawFrame();
   checkAutonomousSchedule();
+  checkAutoUpdate();
 
   if (stateDirty && millis() - stateDirtyAt > STATE_SAVE_DELAY_MS) {
     saveState();

@@ -1,0 +1,16 @@
+# збірка прошивки
+build/
+*.bin
+!site/releases/*.bin
+
+# секрети Wi-Fi
+espcode/secrets.h
+
+# тимчасове
+.DS_Store
+node_modules/
+
+# готові архіви для завантаження
+dist/
+# готові архіви (генеруються, не для git)
+/smart-lamp-*.zip

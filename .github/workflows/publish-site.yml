@@ -1,0 +1,129 @@
+name: Publish site & firmware
+
+# Що робить цей workflow:
+#   1) при кожному пуші в main — збирає сайт (tools/build-site.mjs) і публікує його на GitHub Pages;
+#   2) збирає прошивку з espcode/espcode.ino у .bin і кладе її на сайт
+#      (site/releases/smart-lamp-<версія>.bin) разом із SHA-256;
+#   3) оновлює releases/index.json + manifest.json, які читає лампа для автооновлення;
+#   4) при пуші тегу v* — додатково створює GitHub Release із цим .bin.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: lamp-publish
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build site assets (effects + manifest links)
+        run: node tools/build-site.mjs
+
+      - name: Install arduino-cli
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR="$HOME/.local/bin" sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install ESP32 core (Arduino)
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls \
+            https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          arduino-cli lib install "Adafruit NeoPixel"
+
+      - name: Provide secrets.h for the build
+        run: |
+          cd espcode
+          [ -f secrets.h ] || cp secrets.example.h secrets.h
+
+      - name: Compile firmware (esp32c3)
+        run: |
+          mkdir -p build
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32c3:CDCOnBoot=cdc,PartitionScheme=min_spiffs \
+            --output-dir build \
+            espcode
+          ls -la build
+
+      - name: Prepare release .bin + checksum
+        id: bin
+        run: |
+          set -euo pipefail
+          VER=$(grep -oP '#define\s+FW_VERSION\s+"\K[^"]+' espcode/espcode.ino)
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          mkdir -p site/releases
+          SRC=build/espcode.ino.bin
+          [ -f "$SRC" ] || SRC=$(ls build/*.ino.bin | head -1)
+          cp "$SRC" "site/releases/smart-lamp-$VER.bin"
+          SIZE=$(stat -c%s "site/releases/smart-lamp-$VER.bin")
+          SHA=$(sha256sum "site/releases/smart-lamp-$VER.bin" | cut -d' ' -f1)
+          echo "size=$SIZE" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Зібрано v$VER, $SIZE байт, sha256=$SHA"
+
+      - name: Update releases index
+        run: |
+          node tools/update-releases.mjs \
+            --version "${{ steps.bin.outputs.version }}" \
+            --file "releases/smart-lamp-${{ steps.bin.outputs.version }}.bin" \
+            --size "${{ steps.bin.outputs.size }}" \
+            --sha256 "${{ steps.bin.outputs.sha }}"
+          node tools/build-site.mjs
+          cat site/releases/manifest.json
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-lamp-firmware-${{ steps.bin.outputs.version }}
+          path: site/releases/smart-lamp-${{ steps.bin.outputs.version }}.bin
+
+      - name: Create GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER="${{ steps.bin.outputs.version }}"
+          gh release create "v$VER" "site/releases/smart-lamp-$VER.bin" \
+            --title "Smart Lamp v$VER" \
+            --notes-file "site/releases/notes-$VER.md" --verify-tag || \
+          gh release create "v$VER" "site/releases/smart-lamp-$VER.bin" \
+            --title "Smart Lamp v$VER" --generate-notes || true
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
