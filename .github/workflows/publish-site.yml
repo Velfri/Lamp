@@ -140,10 +140,6 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
-          # службові файли не мають потрапляти на публічний сайт
-          exclude: |
-            **/README.md
-            **/.*
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
